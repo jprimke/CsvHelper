@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -23,15 +23,15 @@ namespace CsvHelper
 		/// <summary>
 		/// The record.
 		/// </summary>
-		public readonly string[] Record;
+		public readonly IReaderRow Row;
 
 		/// <summary>
 		/// Creates a new instance of ShouldSkipRecordArgs.
 		/// </summary>
-		/// <param name="record">The record.</param>
-		public ShouldSkipRecordArgs(string[] record)
+		/// <param name="row">The row.</param>
+		public ShouldSkipRecordArgs(IReaderRow row)
 		{
-			Record = record;
+			Row = row;
 		}
 	}
 }

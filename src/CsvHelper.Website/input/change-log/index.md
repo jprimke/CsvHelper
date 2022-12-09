@@ -1,5 +1,156 @@
 ﻿# Change Log
 
+### 30.0.1
+
+#### Bug Fixes
+
+- Fixed issue when writing with the escape char not being escaped if it was different than the quote char.
+- Fixed issue with `CsvWriter` not passing `leavOpen` parameter to other constructor call.
+- Fixed issue with TypeConverter being assigned to a member that has a Convert expression assigned to it.
+
+### 30.0.0
+
+#### Features
+
+- Added `Field` and `RawRecord` to `BadDataException`.
+- Pass `IWriterConfiguration` into `CsvWriter` constructor instead of `CsvConfiguration`.
+- Allow inherited header prefixes.
+- Allow mapping to dynamic properties.
+- Added `MemberName` to the type converter exception message.
+- Added `MaxFieldSize` configuration. If max size is set and the size is reached, `MaxFieldSizeException` is thrown.
+- Added class level attribute capability.  
+  New Attributes:
+  - `BufferSizeAttribute`
+  - `CacheFieldsAttribute`
+  - `CommentAttribute`
+  - `CountBytesAttribute`
+  - `DelimiterAttribute`
+  - `DetectColumnCountChangesAttribute`
+  - `DetectDelimiterAttribute`
+  - `DetectDelimiterValueAttribute`
+  - `EncodingAttribute`
+  - `EscapeAttribute`
+  - `ExceptionMessagesContainRawDataAttribute`
+  - `HasHeaderRecordAttribute`
+  - `IgnoreBlankLinesAttribute`
+  - `IgnoreReferencesAttribute`
+  - `IncludePrivateMembersAttribute`
+  - `InjectionCharactersAttribute`
+  - `InjectionEscapeCharacterAttribute`
+  - `InjectionOptionsAttribute`
+  - `LineBreakInQuotedFieldIsBadDataAttribute`
+  - `MaxFieldSizeAttribute`
+  - `ModeAttribute`
+  - `NewLineAttribute`
+  - `ProcessFieldAttribute`
+  - `QuoteAttribute`
+  - `TrimOptionsAttribute`
+  - `UseNewObjectForNullReferenceMembersAttribute`
+  - `WhiteSpaceCharsAttribute`
+- Added `params object[] constructorArgs` to `TypeConverterAttribute`.
+- Added validation message expression to `Validate` mapping.
+- Added `IReaderRow` to `ValidateArgs`.
+- Relax `Default` and `Constant` type constraints to `IsAssignableFrom`.
+
+#### Bug Fixes
+
+- Added `null` check in `WriteRecords`.
+- Fixed interpolation in exception message.
+- Fixed constructor mapping issue where parameter has a type converter but would still try and use constructor mapping. 
+
+#### Breaking Changes
+
+- Added `string field` and `string rawRecord` to `BadDataException` constructor.
+- Added `double MaxFieldSize { get; }` to `IParserConfiguration`.
+- Added `bool LeaveOpen { get; }` to `IWriterConfiguration`.
+- Added `bool LeaveOpen { get; }` to `IParserConfiguration`.
+- Added `IReaderRow row` to `ValidateArgs` constructor.
+
+### 29.0.0
+
+#### Features
+
+- Added support for `TypeConverter` factories. This allows for the ability to handle many types at once.
+Code that manually handle nullable, enums, and collections were changed into factories.
+- Moved delimiter detection into a configuration function. 
+This allows for a user to easily change the detection logic.
+Default logic is in `ConfigurationFunction.GetDelimiter`.
+- Changed `CsvConfiguration.SanitizeInjection` flag to `CsvConfiguration.InjectionOptions` enum.
+  - Options are:
+    - None - Default. Does no injection protection. The is default because it's not a part of CSV and is used for an external tool.
+    - Escape - Escapes the field based on OWASP recommendations if an injection char is detected.
+    - Strip - Removes the injection character.
+    - Exception - Throws an exception if an injection char is detected.
+  - Added `\t` and `\r` to `CsvConfiguration.InjectionEscapeCharacter`.
+  - Changed `CsvConfiguration.InjectionEscapeCharacter` from `\t` to `'`.
+- `CsvDataReader.GetDataTypeName` will use types when the schema table is overridden.
+- More detail added to `CsvConfiguration.Validate` exception messages.
+- Reduce double dictionary lookup in a few places.
+
+#### Bug Fixes
+
+- Fixed issues with delimiter detection logic.
+- Missing `ConfigureAwait(false)` added to async calls.
+- Fixed issue with `CsvReader.TryGetField` throwing an exception when multiple headers are read.
+- Fixed issue with `MemberMap.Validate` passing the wrong type into the expression call.
+- Fixed issue with `MemberMap<T>.Convert` not working with `static` methods.
+- Fixed issue with `DateTimeConverter` and `DateTimeOffsetConverter` throwing an exception other than `TypeConverterException` on failure.
+- Fixed issue where `MissingFieldFound` was not being called if `IgnoreBlankLines` was off.
+
+#### Breaking Changes
+
+- `CsvConfiguration.SanitizeForInjection` -> `CsvConfiguration.InjectionOptions`
+- `bool IWriterConfiguration.SanitizeForInjection` -> `InjectionOptions IWriterConfiguration.InjectionOptions`
+- `CsvConfiguration.InjectionEscapeCharacter` changed from `\t` to `'`.
+- Added `\t` and `\r` to `CsvConfiguration.InjectionCharacters`.
+- Added `GetDelimiter IParserConfiguration.GetDelimiter` delegate.
+
+### 28.0.1
+
+#### Bug Fixes
+
+- Disabled nullable until all null issues are fixed.
+
+### 28.0.0
+
+#### Features
+
+- Updated delimiter detection algorithm.
+  - Strips escaped text based on mode.
+  - Only looks for delimiters that appear on every line.
+  - Uses `CultureInfo.TextInfo.ListSeparator` if it's on every line.
+- Cache processed fields in parser so they're not processed on every access.
+- Cache `CsvParser.Record[]` so multiple calls wont' regenerate it.
+- `ShouldSkipRecord` is `null` by default and won't get called if not set.
+- `ShouldSkipRecordArgs` holds `IReaderRow` now instead of `string[]`.
+- Changed `CsvParser` constructor to take in `IParserConfiguration` instead of `CsvConfiguration`.
+- Changed `CsvReader` constructor to take in `IReaderConfiguration` instead of `CsvConfiguration`.
+
+#### Bug Fixes
+
+- Fixed issue where collection types weren't getting the correct `MemberMapData` passed to them when converting the item.
+- Fixed issue where `BadDataFound` was being called multiple times for the same field.
+- Fixed issue where you can't read with no header when a name has been mapped.
+- Fixed issue where quoted fields not correctly being identified if there was a buffer swap on white space before quote.
+
+#### Breaking Changes
+
+- `ShouldSkipRecordArgs` holds `IReaderRow` now instead of `string[]`.
+- Removed `ConfigurationFunctions.ShouldSkipRecord` as the default is now `null`.
+- Added `IParserConfiguration.Validate`.
+
+### 27.2.1
+
+#### Bug Fixes
+
+- Changed dependencies to minimal needed version.
+
+### 27.2.0
+
+#### Features
+
+- Support for net60 `DateOnly` and `TimeOnly` types.
+
 ### 27.1.1
 
 #### Bug Fixes
@@ -51,7 +202,7 @@
 - Added `IParserConfiguration.DetectDelimiter`.
 - Added `IParserConfiguration.DetectDelimiterValues`.
 - Added `IWriter.WriteRecordsAsync<T>(IAsyncEnumerable<T> records, CancellationToken cancellationToken = default)`.
-- Removed `\t` from `CsvConfiguration.WhiteSpaceCharacters` as a default.
+- Removed `\t` from `CsvConfiguration.WhiteSpaceChars` as a default.
 
 ### 26.1.0
 

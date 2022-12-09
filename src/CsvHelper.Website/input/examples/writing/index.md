@@ -2,19 +2,46 @@
 
 <h2 class="title is-2 has-text-danger">Injection Warning</h2>
 
-When opening a CSV in an external program, a formula in a field could be ran that contains a vulnerability. Read more here: [Comma Separated Vulnerabilities](https://www.contextis.com/blog/comma-separated-vulnerabilities). Due to this issue, if a field starts with characters `=`, `@`, `+`, or `-`, that field will be prepended with a `\t`. If the field is quoted, the `\t` will come after the `"`.
+When opening a CSV in an external program, a formula in a field could be ran that contains a vulnerability. 
+Read more here: [CSV Injection](https://owasp.org/www-community/attacks/CSV_Injection). 
+Due to this issue, there is a setting `InjectionOptions` that can be configured.
 
-`=one` -> `\t=one`
+The list of injection characters to detect are configurable in `CsvConfiguration.InjectionCharacters`
+and default to `=`, `@`, `+`, `-`, `\t`, `\r`. An injection character can be the first character of a field
+or quoted field. i.e. `=foo` or `"=foo"`
 
-`"=one"` -> `"\t=one"`
+The `InjectionOptions` values are `None` (default), `Escape`, `Strip`, and `Exception`.
 
-You are able to turn this functionality off in configuration.
+###### None
 
-```cs
-csv.Configuration.SanitizeForInjection = false;
-```
+No injection protection is taken.
 
-When writing, you can throw an enumerable of class objects, dynamic objects, anonymous type objects, or pretty much anything else, and it will get written.
+###### Exception
+
+If an injection character is detected, a `CsvWriterException` is thrown.
+
+###### Strip
+
+All injection characters at the start of a field will be removed. `===foo` will be stripped to `foo`.
+
+###### Escape
+
+If an injection character is detected, the field will be prepended with the `InjectionEscapeCharacter`
+that defaults to `'`. The field will be quoted if it is not already.
+
+`=one` -> `"'=one"`
+
+`"=one"` -> `"'=one"`
+
+`=one"two` -> `"'=one""two"`
+
+This option is disabled by default because the primary goal if this library is to read and write CSV
+files. If you are storing user entered data that you haven't sanitized yourself and you're letting
+it be accessed by people that may open in Excel/Sheets/etc, you might consider enabling this feature.
+The `InjectionEscapeCharacter` is not removed when reading.
+
+When writing, you can throw an enumerable of class objects, dynamic objects, anonymous type objects, or pretty much 
+anything else, and it will get written.
 
 Topics | &nbsp;
 - | -

@@ -3,18 +3,20 @@
 		<!-- Assembly -->
 		<AssemblyTitle>CsvHelper</AssemblyTitle>
 		<Description>A library for reading and writing CSV files. Extremely fast, flexible, and easy to use. Supports reading and writing of custom class objects.</Description>
-		<Copyright>Copyright © 2009-2021 Josh Close</Copyright>
+		<Copyright>Copyright © 2009-2022 Josh Close</Copyright>
 		<Authors>Josh Close</Authors>
 
 		<!-- Build -->
 		<AssemblyName>CsvHelper</AssemblyName>
-		<TargetFrameworks>net50;netstandard2.1;netstandard2.0;net47;net45</TargetFrameworks>
-		<!--<TargetFrameworks>net50</TargetFrameworks>-->
+		<TargetFrameworks>net6.0;net5.0;netstandard2.1;netstandard2.0;net47;net45</TargetFrameworks>
+		<!--<TargetFrameworks>net60</TargetFrameworks>-->
+		<LangVersion>latest</LangVersion>
 		<RootNamespace>CsvHelper</RootNamespace>
 		<DefaultLanguage>en-US</DefaultLanguage>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<LangVersion>latest</LangVersion>
 		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <!--<Nullable>enable</Nullable>
+        <WarningsAsErrors>nullable</WarningsAsErrors>-->
 
 		<!-- Sign -->
 		<SignAssembly>true</SignAssembly>
@@ -39,11 +41,7 @@
 	</PropertyGroup>
 	
 	<ItemGroup>
-	  <None Remove="CsvHelper.net45.v3.ncrunchproject" />
-	  <None Remove="CsvHelper.net47.v3.ncrunchproject" />
-	  <None Remove="CsvHelper.net50.v3.ncrunchproject" />
-	  <None Remove="CsvHelper.netstandard2.0.v3.ncrunchproject" />
-	  <None Remove="CsvHelper.netstandard2.1.v3.ncrunchproject" />
+	  <None Remove="*.ncrunchproject" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -52,35 +50,32 @@
 
 	<!-- .NET 4.5 -->
 	<ItemGroup Condition="'$(TargetFramework)' == 'net45'">
-		<PackageReference Include="Microsoft.CSharp" Version="[4.7.0]" />
-		<PackageReference Include="System.Buffers" Version="[4.5.1]" />
-		<PackageReference Include="System.Memory" Version="[4.5.4]" />
-		<PackageReference Include="System.ValueTuple" Version="[4.5.0]" />
+		<PackageReference Include="Microsoft.CSharp" Version="4.3.0" />
+		<PackageReference Include="System.Memory" Version="4.5.0" />
+		<PackageReference Include="System.ValueTuple" Version="4.3.0" />
 	</ItemGroup>
 
 	<!-- .NET 4.7 -->
 	<ItemGroup Condition="'$(TargetFramework)' == 'net47'">
-		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="[5.0.0]" />
-		<PackageReference Include="Microsoft.Bcl.HashCode" Version="[1.1.1]" />
-		<PackageReference Include="Microsoft.CSharp" Version="[4.7.0]" />
-		<PackageReference Include="System.Buffers" Version="[4.5.1]" />
-		<PackageReference Include="System.Memory" Version="[4.5.4]" />
-		<PackageReference Include="System.Threading.Tasks.Extensions" Version="[4.5.4]" />
+		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="1.0.0" />
+		<PackageReference Include="Microsoft.Bcl.HashCode" Version="1.0.0" />
+		<PackageReference Include="Microsoft.CSharp" Version="4.3.0" />
+		<PackageReference Include="System.Memory" Version="4.5.0" />
+		<PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.2" />
 	</ItemGroup>
 
 	<!-- .NET Standard 2.0 -->
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="[5.0.0]" />
-		<PackageReference Include="Microsoft.Bcl.HashCode" Version="[1.1.1]" />
-		<PackageReference Include="Microsoft.CSharp" Version="[4.7.0]" />
-		<PackageReference Include="System.Buffers" Version="[4.5.1]" />
-		<PackageReference Include="System.Memory" Version="[4.5.4]" />
-		<PackageReference Include="System.Threading.Tasks.Extensions" Version="[4.5.4]" />
+		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="1.0.0" />
+		<PackageReference Include="Microsoft.Bcl.HashCode" Version="1.0.0" />
+		<PackageReference Include="Microsoft.CSharp" Version="4.3.0" />
+		<PackageReference Include="System.Memory" Version="4.5.0" />
+		<PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.2" />
 	</ItemGroup>
 
 	<!-- .NET Standard 2.1 -->
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
-		<PackageReference Include="Microsoft.CSharp" Version="[4.7.0]" />
+		<PackageReference Include="Microsoft.CSharp" Version="4.3.0" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -38,14 +38,16 @@ namespace CsvHelper.Configuration
 		/// Appends a prefix to the header of each field of the reference parameter.
 		/// </summary>
 		/// <param name="prefix">The prefix to be prepended to headers of each reference parameter.</param>
+		/// <param name="inherit">Inherit parent prefixes.</param>
 		/// <returns>The current <see cref="ParameterReferenceMap" /></returns>
-		public ParameterReferenceMap Prefix(string prefix = null)
+		public ParameterReferenceMap Prefix(string prefix = null, bool inherit = false)
 		{
 			if (string.IsNullOrEmpty(prefix))
 			{
 				prefix = data.Parameter.Name + ".";
 			}
 
+			data.Inherit = inherit;
 			data.Prefix = prefix;
 
 			return this;

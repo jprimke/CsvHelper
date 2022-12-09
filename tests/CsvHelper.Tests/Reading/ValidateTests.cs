@@ -1,21 +1,21 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
 using CsvHelper.Configuration;
-using Xunit;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Xunit;
 
 namespace CsvHelper.Tests.Reading
 {
-	
+
 	public class ValidateTests
 	{
 		[Fact]
-		public void ValidateTest()
+		public void GenericValidateTest()
 		{
 			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
 			{
@@ -31,7 +31,29 @@ namespace CsvHelper.Tests.Reading
 				writer.Flush();
 				stream.Position = 0;
 
-				csv.Context.RegisterClassMap<ValidateMap>();
+				csv.Context.RegisterClassMap<GenericValidateMap>();
+				Assert.Throws<FieldValidationException>(() => csv.GetRecords<Test>().ToList());
+			}
+		}
+
+		[Fact]
+		public void NonGenericValidateTest()
+		{
+			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+			{
+				MissingFieldFound = null,
+			};
+			using (var stream = new MemoryStream())
+			using (var writer = new StreamWriter(stream))
+			using (var reader = new StreamReader(stream))
+			using (var csv = new CsvReader(reader, config))
+			{
+				writer.WriteLine("Id,Name");
+				writer.WriteLine(",one");
+				writer.Flush();
+				stream.Position = 0;
+
+				csv.Context.RegisterClassMap<NonGenericValidateMap>();
 				Assert.Throws<FieldValidationException>(() => csv.GetRecords<Test>().ToList());
 			}
 		}
@@ -86,6 +108,24 @@ namespace CsvHelper.Tests.Reading
 			}
 		}
 
+		[Fact]
+		public void ValidateMessageTest()
+		{
+			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+			{
+			};
+			var s = new TestStringBuilder(config.NewLine);
+			s.AppendLine("Id,Name");
+			s.AppendLine("1,one");
+			using (var reader = new StringReader(s))
+			using (var csv = new CsvReader(reader, config))
+			{
+				csv.Context.RegisterClassMap<ValidationMessageMap>();
+				var exception = Assert.Throws<FieldValidationException>(() => csv.GetRecords<Test>().ToList());
+				Assert.StartsWith("Field 'one' was not foo.", exception.Message);
+			}
+		}
+
 		private class Test
 		{
 			public int Id { get; set; }
@@ -93,12 +133,24 @@ namespace CsvHelper.Tests.Reading
 			public string Name { get; set; }
 		}
 
-		private sealed class ValidateMap : ClassMap<Test>
+		private sealed class GenericValidateMap : ClassMap<Test>
 		{
-			public ValidateMap()
+			public GenericValidateMap()
 			{
 				Map(m => m.Id).Validate(args => !string.IsNullOrEmpty(args.Field));
 				Map(m => m.Name);
+			}
+		}
+
+		private sealed class NonGenericValidateMap : ClassMap<Test>
+		{
+			public NonGenericValidateMap()
+			{
+				AutoMap(System.Globalization.CultureInfo.InvariantCulture);
+				foreach (var memberMap in MemberMaps)
+				{
+					Map(typeof(Test), memberMap.Data.Member).Validate(args => !string.IsNullOrEmpty(args.Field));
+				}
 			}
 		}
 
@@ -108,15 +160,15 @@ namespace CsvHelper.Tests.Reading
 			{
 				Map(m => m.Id);
 				Map(m => m.Name).Validate(args =>
-			 {
-				 var isValid = !string.IsNullOrEmpty(args.Field);
-				 if (!isValid)
-				 {
-					 logger.AppendLine($"Field '{args.Field}' is not valid!");
-				 }
+				{
+					var isValid = !string.IsNullOrEmpty(args.Field);
+					if (!isValid)
+					{
+						logger.AppendLine($"Field '{args.Field}' is not valid!");
+					}
 
-				 return true;
-			 });
+					return true;
+				});
 			}
 		}
 
@@ -131,6 +183,15 @@ namespace CsvHelper.Tests.Reading
 
 		private class CustomException : CsvHelperException
 		{
+		}
+
+		private class ValidationMessageMap : ClassMap<Test>
+		{
+			public ValidationMessageMap()
+			{
+				Map(m => m.Id);
+				Map(m => m.Name).Validate(args => args.Field == "foo", args => $"Field '{args.Field}' was not foo.");
+			}
 		}
 	}
 }

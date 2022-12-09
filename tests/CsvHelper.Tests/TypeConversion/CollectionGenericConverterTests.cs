@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -11,6 +11,8 @@ using System.IO;
 using Xunit;
 using System.Reflection;
 using CsvHelper.Tests.Mocks;
+using CsvHelper.Configuration.Attributes;
+using System.Linq;
 
 namespace CsvHelper.Tests.TypeConversion
 {
@@ -43,6 +45,23 @@ namespace CsvHelper.Tests.TypeConversion
 			}
 		}
 
+		[Fact]
+		public void GetRecords_NullValuesAttributeWithIndex_UsesCustomNullValue()
+		{
+			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+			{
+				HasHeaderRecord = false,
+			};
+			var parser = new ParserMock(config)
+			{
+				{ "NULL", "", "2" },
+			};
+			using (var csv = new CsvReader(parser))
+			{
+				var records = csv.GetRecords<NullValuesAttributeIndexTest>().ToList();
+			}
+		}
+
 		private class Test
 		{
 			public List<int?> List { get; set; }
@@ -70,6 +89,13 @@ namespace CsvHelper.Tests.TypeConversion
 			{
 				Map(m => m.List);
 			}
+		}
+
+		private class NullValuesAttributeIndexTest
+		{
+			[Index(0, 2)]
+			[NullValues("NULL")]
+			public List<int?> List { get; set; }
 		}
 	}
 }

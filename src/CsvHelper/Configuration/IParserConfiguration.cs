@@ -1,7 +1,8 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
+using CsvHelper.Delegates;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -15,18 +16,15 @@ namespace CsvHelper.Configuration
 	public interface IParserConfiguration
 	{
 		/// <summary>
+		/// Gets the culture info used to read an write CSV files.
+		/// </summary>
+		CultureInfo CultureInfo { get; }
+
+		/// <summary>
 		/// Cache fields that are created when parsing.
 		/// Default is false.
 		/// </summary>
 		bool CacheFields { get; }
-
-		/// <summary>
-		/// A value indicating whether to leave the <see cref="TextReader"/> or <see cref="TextWriter"/> open after this object is disposed.
-		/// </summary>
-		/// <value>
-		///   <c>true</c> to leave open, otherwise <c>false</c>.
-		/// </value>
-		bool LeaveOpen { get; }
 
 		/// <summary>
 		/// The newline string to use. Default is \r\n (CRLF).
@@ -85,6 +83,12 @@ namespace CsvHelper.Configuration
 		BadDataFound BadDataFound { get; }
 
 		/// <summary>
+		/// Gets or sets the maximum size of a field.
+		/// Defaults to 0, indicating maximum field size is not checked.
+		/// </summary>
+		double MaxFieldSize { get; }
+
+		/// <summary>
 		/// Gets a value indicating if a line break found in a quote field should
 		/// be considered bad data. <c>true</c> to consider a line break bad data, otherwise <c>false</c>.
 		/// Defaults to false.
@@ -129,6 +133,11 @@ namespace CsvHelper.Configuration
 		bool DetectDelimiter { get; }
 
 		/// <summary>
+		/// Gets the function that is called when <see cref="DetectDelimiter"/> is enabled.
+		/// </summary>
+		GetDelimiter GetDelimiter { get; }
+
+		/// <summary>
 		/// The possible delimiter values used when detecting the delimiter.
 		/// Default is [",", ";", "|", "\t"].
 		/// </summary>
@@ -148,7 +157,7 @@ namespace CsvHelper.Configuration
 		/// <summary>
 		/// Characters considered whitespace.
 		/// Used when trimming fields.
-		/// Default is [' ', '\t'].
+		/// Default is [' '].
 		/// </summary>
 		char[] WhiteSpaceChars { get; }
 
@@ -158,5 +167,10 @@ namespace CsvHelper.Configuration
 		/// Default is <c>true</c>.
 		/// </summary>
 		bool ExceptionMessagesContainRawData { get; }
+
+		/// <summary>
+		/// Validates the configuration.
+		/// </summary>
+		void Validate();
 	}
 }

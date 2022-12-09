@@ -1,14 +1,14 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
+using CsvHelper.Delegates;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace CsvHelper.Configuration
 {
@@ -31,6 +31,14 @@ namespace CsvHelper.Configuration
 			foreach (var invalidHeader in args.InvalidHeaders)
 			{
 				errorMessage.AppendLine($"Header with name '{string.Join("' or '", invalidHeader.Names)}'[{invalidHeader.Index}] was not found.");
+			}
+
+			if (args.Context.Reader.HeaderRecord != null)
+			{
+				foreach (var header in args.Context.Reader.HeaderRecord)
+				{
+					errorMessage.AppendLine($"Headers: '{string.Join("', '", args.Context.Reader.HeaderRecord)}'");
+				}
 			}
 
 			var messagePostfix =
@@ -73,7 +81,7 @@ namespace CsvHelper.Configuration
 		/// </summary>
 		public static void BadDataFound(BadDataFoundArgs args)
 		{
-			throw new BadDataException(args.Context, $"You can ignore bad data by setting {nameof(BadDataFound)} to null.");
+			throw new BadDataException(args.Field, args.RawRecord, args.Context, $"You can ignore bad data by setting {nameof(BadDataFound)} to null.");
 		}
 
 		/// <summary>
@@ -95,7 +103,7 @@ namespace CsvHelper.Configuration
 		{
 			var config = args.Row.Configuration;
 
-			var shouldQuote = !string.IsNullOrEmpty(args.Field) && 
+			var shouldQuote = !string.IsNullOrEmpty(args.Field) &&
 			(
 				args.Field.Contains(config.Quote) // Contains quote
 				|| args.Field[0] == ' ' // Starts with a space
@@ -106,14 +114,6 @@ namespace CsvHelper.Configuration
 			);
 
 			return shouldQuote;
-		}
-
-		/// <summary>
-		/// Returns <c>false</c>.
-		/// </summary>
-		public static bool ShouldSkipRecord(ShouldSkipRecordArgs args)
-		{
-			return false;
 		}
 
 		/// <summary>
@@ -128,15 +128,19 @@ namespace CsvHelper.Configuration
 		/// Returns <c>true</c> if <paramref name="args.ParameterType"/>:
 		/// 1. does not have a parameterless constructor
 		/// 2. has a constructor
-		/// 3. is not a user defined struct
-		/// 4. is not an interface
-		/// 5. TypeCode is not an Object.
+		/// 3. is not a value type
+		/// 4. is not a primitive
+		/// 5. is not an enum
+		/// 6. is not an interface
+		/// 7. TypeCode is an Object.
 		/// </summary>
 		public static bool ShouldUseConstructorParameters(ShouldUseConstructorParametersArgs args)
 		{
 			return !args.ParameterType.HasParameterlessConstructor()
 				&& args.ParameterType.HasConstructor()
-				&& !args.ParameterType.IsUserDefinedStruct()
+				&& !args.ParameterType.IsValueType
+				&& !args.ParameterType.IsPrimitive
+				&& !args.ParameterType.IsEnum
 				&& !args.ParameterType.IsInterface
 				&& Type.GetTypeCode(args.ParameterType) == TypeCode.Object;
 		}
@@ -169,6 +173,95 @@ namespace CsvHelper.Configuration
 			header = args.Context.Reader.Configuration.PrepareHeaderForMatch(prepareHeaderForMatchArgs);
 
 			return header;
+		}
+
+		/// <summary>
+		/// Detects the delimiter based on the given text.
+		/// Return the detected delimiter or null if one wasn't found.
+		/// </summary>
+		/// <param name="args">The args.</param>
+		public static string? GetDelimiter(GetDelimiterArgs args)
+		{
+			var text = args.Text;
+			var config = args.Configuration;
+
+			if (config.Mode == CsvMode.RFC4180)
+			{
+				// Remove text in between pairs of quotes.
+				text = Regex.Replace(text, $"{config.Quote}.*?{config.Quote}", string.Empty, RegexOptions.Singleline);
+			}
+			else if (config.Mode == CsvMode.Escape)
+			{
+				// Remove escaped characters.
+				text = Regex.Replace(text, $"({config.Escape}.)", string.Empty, RegexOptions.Singleline);
+			}
+
+			var newLine = config.NewLine;
+			if ((new[] { "\r\n", "\r", "\n" }).Contains(newLine))
+			{
+				newLine = "\r\n|\r|\n";
+			}
+
+			var lineDelimiterCounts = new List<Dictionary<string, int>>();
+			while (text.Length > 0)
+			{
+				// Since all escaped text has been removed, we can reliably read line by line.
+				var match = Regex.Match(text, newLine);
+				var line = match.Success ? text.Substring(0, match.Index + match.Length) : text;
+
+				var delimiterCounts = new Dictionary<string, int>();
+				foreach (var delimiter in config.DetectDelimiterValues)
+				{
+					// Escape regex special chars to use as regex pattern.
+					var pattern = Regex.Replace(delimiter, @"([.$^{\[(|)*+?\\])", "\\$1");
+					delimiterCounts[delimiter] = Regex.Matches(line, pattern).Count;
+				}
+
+				lineDelimiterCounts.Add(delimiterCounts);
+
+				text = match.Success ? text.Substring(match.Index + match.Length) : string.Empty;
+			}
+
+			if (lineDelimiterCounts.Count > 1)
+			{
+				// The last line isn't complete and can't be used to reliably detect a delimiter.
+				lineDelimiterCounts.Remove(lineDelimiterCounts.Last());
+			}
+
+			// Rank only the delimiters that appear on every line.
+			var delimiters =
+			(
+				from counts in lineDelimiterCounts
+				from count in counts
+				group count by count.Key into g
+				where g.All(x => x.Value > 0)
+				let sum = g.Sum(x => x.Value)
+				orderby sum descending
+				select new
+				{
+					Delimiter = g.Key,
+					Count = sum
+				}
+			).ToList();
+
+			string? newDelimiter = null;
+			if (delimiters.Any(x => x.Delimiter == config.CultureInfo.TextInfo.ListSeparator) && lineDelimiterCounts.Count > 1)
+			{
+				// The culture's separator is on every line. Assume this is the delimiter.
+				newDelimiter = config.CultureInfo.TextInfo.ListSeparator;
+			}
+			else
+			{
+				// Choose the highest ranked delimiter.
+				newDelimiter = delimiters.Select(x => x.Delimiter).FirstOrDefault();
+			}
+
+			if (newDelimiter != null)
+			{
+				config.Validate();
+			}
+
+			return newDelimiter ?? config.Delimiter;
 		}
 	}
 }

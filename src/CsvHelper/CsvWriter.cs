@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -50,11 +50,13 @@ namespace CsvHelper
 		private readonly string newLine;
 		private readonly char[] injectionCharacters;
 		private readonly char injectionEscapeCharacter;
-		private readonly bool sanitizeForInjection;
+		private readonly InjectionOptions injectionOptions;
 		private readonly CsvMode mode;
+		private readonly string escapeString;
 		private readonly string escapeQuoteString;
 		private readonly string escapeDelimiterString;
 		private readonly string escapeNewlineString;
+		private readonly string escapeEscapeString;
 
 		private bool disposed;
 		private bool hasHeaderBeenWritten;
@@ -86,14 +88,15 @@ namespace CsvHelper
 		/// <param name="writer">The writer.</param>
 		/// <param name="culture">The culture.</param>
 		/// <param name="leaveOpen"><c>true</c> to leave the <see cref="TextWriter"/> open after the <see cref="CsvWriter"/> object is disposed, otherwise <c>false</c>.</param>
-		public CsvWriter(TextWriter writer, CultureInfo culture, bool leaveOpen = false) : this(writer, new CsvConfiguration(culture) { LeaveOpen = leaveOpen }) { }
+		public CsvWriter(TextWriter writer, CultureInfo culture, bool leaveOpen = false) : this(writer, new CsvConfiguration(culture), leaveOpen) { }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CsvWriter"/> class.
 		/// </summary>
 		/// <param name="writer">The writer.</param>
 		/// <param name="configuration">The configuration.</param>
-		public CsvWriter(TextWriter writer, CsvConfiguration configuration)
+		/// <param name="leaveOpen"><c>true</c> to leave the <see cref="TextWriter"/> open after the <see cref="CsvWriter"/> object is disposed, otherwise <c>false</c>.</param>
+		public CsvWriter(TextWriter writer, IWriterConfiguration configuration, bool leaveOpen = false)
 		{
 			configuration.Validate();
 
@@ -111,16 +114,18 @@ namespace CsvHelper
 			escapeDelimiterString = new string(configuration.Delimiter.SelectMany(c => new[] { configuration.Escape, c }).ToArray());
 			escapeNewlineString = new string(configuration.NewLine.SelectMany(c => new[] { configuration.Escape, c }).ToArray());
 			escapeQuoteString = new string(new[] { configuration.Escape, configuration.Quote });
+			escapeEscapeString = new string(new[] { configuration.Escape, configuration.Escape });
 			hasHeaderRecord = configuration.HasHeaderRecord;
 			includePrivateMembers = configuration.IncludePrivateMembers;
 			injectionCharacters = configuration.InjectionCharacters;
 			injectionEscapeCharacter = configuration.InjectionEscapeCharacter;
-			leaveOpen = configuration.LeaveOpen;
+			this.leaveOpen = leaveOpen;
 			mode = configuration.Mode;
 			newLine = configuration.NewLine;
 			quote = configuration.Quote;
 			quoteString = configuration.Quote.ToString();
-			sanitizeForInjection = configuration.SanitizeForInjection;
+			escapeString = configuration.Escape.ToString();
+			injectionOptions = configuration.InjectionOptions;
 			shouldQuote = configuration.ShouldQuote;
 			trimOptions = configuration.TrimOptions;
 
@@ -164,6 +169,11 @@ namespace CsvHelper
 				// All quotes must be escaped.
 				if (shouldQuote)
 				{
+					if (escapeString != quoteString)
+					{
+						field = field?.Replace(escapeString, escapeEscapeString);
+					}
+
 					field = field?.Replace(quoteString, escapeQuoteString);
 					field = quote + field + quote;
 				}
@@ -171,12 +181,13 @@ namespace CsvHelper
 			else if (mode == CsvMode.Escape)
 			{
 				field = field?
+					.Replace(escapeString, escapeEscapeString)
 					.Replace(quoteString, escapeQuoteString)
 					.Replace(delimiter, escapeDelimiterString)
 					.Replace(newLine, escapeNewlineString);
 			}
 
-			if (sanitizeForInjection)
+			if (injectionOptions != InjectionOptions.None)
 			{
 				field = SanitizeForInjection(field);
 			}
@@ -314,25 +325,26 @@ namespace CsvHelper
 		}
 
 		/// <inheritdoc/>
-		public virtual void WriteRecord<T>(T record)
+		public virtual void WriteRecord<T>(T? record)
 		{
-			if (record is IDynamicMetaObjectProvider dynamicRecord)
-			{
-				if (hasHeaderRecord && !hasHeaderBeenWritten)
-				{
-					WriteDynamicHeader(dynamicRecord);
-					NextRecord();
-				}
-			}
-
 			try
 			{
 				recordManager.Value.Write(record);
-				hasHeaderBeenWritten = true;
 			}
-			catch (Exception ex)
+			catch (TargetInvocationException ex)
 			{
-				throw ex as CsvHelperException ?? new WriterException(context, "An unexpected error occurred.", ex);
+				if (ex.InnerException != null)
+				{
+					throw ex.InnerException;
+				}
+				else
+				{
+					throw;
+				}
+			}
+			catch (Exception ex) when (ex is not CsvHelperException)
+			{
+				throw new WriterException(context, "An unexpected error occurred. See inner exception for details.", ex);
 			}
 		}
 
@@ -343,45 +355,27 @@ namespace CsvHelper
 
 			try
 			{
+				if (WriteHeader(records))
+				{
+					NextRecord();
+				}
+
 				foreach (var record in records)
 				{
-					var recordType = record.GetType();
-
-					if (record is IDynamicMetaObjectProvider dynamicObject)
+					if (record == null)
 					{
-						if (hasHeaderRecord && !hasHeaderBeenWritten)
-						{
-							WriteDynamicHeader(dynamicObject);
-							NextRecord();
-						}
-					}
-					else
-					{
-						// If records is a List<dynamic>, the header hasn't been written yet.
-						// Write the header based on the record type.
-						var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-						if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive)
-						{
-							WriteHeader(recordType);
-							NextRecord();
-						}
+						// Since every record could be a different type, just write a blank line.
+						NextRecord();
+						continue;
 					}
 
-					try
-					{
-						recordManager.Value.Write(record);
-					}
-					catch (TargetInvocationException ex)
-					{
-						throw ex.InnerException;
-					}
-
+					WriteRecord(record);
 					NextRecord();
 				}
 			}
-			catch (Exception ex)
+			catch (Exception ex) when (ex is not CsvHelperException)
 			{
-				throw ex as CsvHelperException ?? new WriterException(context, "An unexpected error occurred.", ex);
+				throw new WriterException(context, "An unexpected error occurred. See inner exception for details.", ex);
 			}
 		}
 
@@ -392,62 +386,20 @@ namespace CsvHelper
 
 			try
 			{
-				// Write the header. If records is a List<dynamic>, the header won't be written.
-				// This is because typeof( T ) = Object.
-				var recordType = typeof(T);
-				var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-				if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive && recordType != typeof(object))
+				if (WriteHeader(records))
 				{
-					WriteHeader(recordType);
-					if (hasHeaderBeenWritten)
-					{
-						NextRecord();
-					}
+					NextRecord();
 				}
 
-				var getRecordType = recordType == typeof(object);
 				foreach (var record in records)
 				{
-					if (getRecordType)
-					{
-						recordType = record.GetType();
-					}
-
-					if (record is IDynamicMetaObjectProvider dynamicObject)
-					{
-						if (hasHeaderRecord && !hasHeaderBeenWritten)
-						{
-							WriteDynamicHeader(dynamicObject);
-							NextRecord();
-						}
-					}
-					else
-					{
-						// If records is a List<dynamic>, the header hasn't been written yet.
-						// Write the header based on the record type.
-						isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-						if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive)
-						{
-							WriteHeader(recordType);
-							NextRecord();
-						}
-					}
-
-					try
-					{
-						recordManager.Value.Write(record);
-					}
-					catch (TargetInvocationException ex)
-					{
-						throw ex.InnerException;
-					}
-
+					WriteRecord(record);
 					NextRecord();
 				}
 			}
-			catch (Exception ex)
+			catch (Exception ex) when (ex is not CsvHelperException)
 			{
-				throw ex as CsvHelperException ?? new WriterException(context, "An unexpected error occurred.", ex);
+				throw new WriterException(context, "An unexpected error occurred. See inner exception for details.", ex);
 			}
 		}
 
@@ -461,47 +413,22 @@ namespace CsvHelper
 
 			try
 			{
+				if (WriteHeader(records))
+				{
+					await NextRecordAsync().ConfigureAwait(false);
+				}
+
 				foreach (var record in records)
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 
-					var recordType = record.GetType();
-
-					if (record is IDynamicMetaObjectProvider dynamicObject)
-					{
-						if (hasHeaderRecord && !hasHeaderBeenWritten)
-						{
-							WriteDynamicHeader(dynamicObject);
-							await NextRecordAsync().ConfigureAwait(false);
-						}
-					}
-					else
-					{
-						// If records is a List<dynamic>, the header hasn't been written yet.
-						// Write the header based on the record type.
-						var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-						if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive)
-						{
-							WriteHeader(recordType);
-							await NextRecordAsync().ConfigureAwait(false);
-						}
-					}
-
-					try
-					{
-						recordManager.Value.Write(record);
-					}
-					catch (TargetInvocationException ex)
-					{
-						throw ex.InnerException;
-					}
-
+					WriteRecord(record);
 					await NextRecordAsync().ConfigureAwait(false);
 				}
 			}
-			catch (Exception ex)
+			catch (Exception ex) when (ex is not CsvHelperException)
 			{
-				throw ex as CsvHelperException ?? new WriterException(context, "An unexpected error occurred.", ex);
+				throw new WriterException(context, "An unexpected error occurred. See inner exception for details.", ex);
 			}
 		}
 
@@ -515,64 +442,22 @@ namespace CsvHelper
 
 			try
 			{
-				// Write the header. If records is a List<dynamic>, the header won't be written.
-				// This is because typeof( T ) = Object.
-				var recordType = typeof(T);
-				var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-				if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive && recordType != typeof(object))
+				if (WriteHeader(records))
 				{
-					WriteHeader(recordType);
-					if (hasHeaderBeenWritten)
-					{
-						await NextRecordAsync().ConfigureAwait(false);
-					}
+					await NextRecordAsync().ConfigureAwait(false);
 				}
 
-				var getRecordType = recordType == typeof(object);
 				foreach (var record in records)
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 
-					if (getRecordType)
-					{
-						recordType = record.GetType();
-					}
-
-					if (record is IDynamicMetaObjectProvider dynamicObject)
-					{
-						if (hasHeaderRecord && !hasHeaderBeenWritten)
-						{
-							WriteDynamicHeader(dynamicObject);
-							await NextRecordAsync().ConfigureAwait(false);
-						}
-					}
-					else
-					{
-						// If records is a List<dynamic>, the header hasn't been written yet.
-						// Write the header based on the record type.
-						isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-						if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive)
-						{
-							WriteHeader(recordType);
-							await NextRecordAsync().ConfigureAwait(false);
-						}
-					}
-
-					try
-					{
-						recordManager.Value.Write(record);
-					}
-					catch (TargetInvocationException ex)
-					{
-						throw ex.InnerException;
-					}
-
+					WriteRecord(record);
 					await NextRecordAsync().ConfigureAwait(false);
 				}
 			}
-			catch (Exception ex)
+			catch (Exception ex) when (ex is not CsvHelperException)
 			{
-				throw ex as CsvHelperException ?? new WriterException(context, "An unexpected error occurred.", ex);
+				throw new WriterException(context, "An unexpected error occurred. See inner exception for details.", ex);
 			}
 		}
 
@@ -587,64 +472,22 @@ namespace CsvHelper
 
 			try
 			{
-				// Write the header. If records is a List<dynamic>, the header won't be written.
-				// This is because typeof( T ) = Object.
-				var recordType = typeof(T);
-				var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-				if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive && recordType != typeof(object))
+				if (await WriteHeaderAsync(records))
 				{
-					WriteHeader(recordType);
-					if (hasHeaderBeenWritten)
-					{
-						await NextRecordAsync().ConfigureAwait(false);
-					}
+					await NextRecordAsync().ConfigureAwait(false);
 				}
 
-				var getRecordType = recordType == typeof(object);
-				await foreach (var record in records)
+				await foreach (var record in records.ConfigureAwait(false))
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 
-					if (getRecordType)
-					{
-						recordType = record.GetType();
-					}
-
-					if (record is IDynamicMetaObjectProvider dynamicObject)
-					{
-						if (hasHeaderRecord && !hasHeaderBeenWritten)
-						{
-							WriteDynamicHeader(dynamicObject);
-							await NextRecordAsync().ConfigureAwait(false);
-						}
-					}
-					else
-					{
-						// If records is a List<dynamic>, the header hasn't been written yet.
-						// Write the header based on the record type.
-						isPrimitive = recordType.GetTypeInfo().IsPrimitive;
-						if (hasHeaderRecord && !hasHeaderBeenWritten && !isPrimitive)
-						{
-							WriteHeader(recordType);
-							await NextRecordAsync().ConfigureAwait(false);
-						}
-					}
-
-					try
-					{
-						recordManager.Value.Write(record);
-					}
-					catch (TargetInvocationException ex)
-					{
-						throw ex.InnerException;
-					}
-
+					WriteRecord(record);
 					await NextRecordAsync().ConfigureAwait(false);
 				}
 			}
-			catch (Exception ex)
+			catch (Exception ex) when (ex is not CsvHelperException)
 			{
-				throw ex as CsvHelperException ?? new WriterException(context, "An unexpected error occurred.", ex);
+				throw new WriterException(context, "An unexpected error occurred. See inner exception for details.", ex);
 			}
 		}
 #endif
@@ -663,7 +506,7 @@ namespace CsvHelper
 		public virtual async Task NextRecordAsync()
 		{
 			WriteToBuffer(newLine);
-			await FlushBufferAsync();
+			await FlushBufferAsync().ConfigureAwait(false);
 
 			index = 0;
 			row++;
@@ -695,7 +538,7 @@ namespace CsvHelper
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		protected virtual async Task FlushBufferAsync()
 		{
-			await writer.WriteAsync(buffer, 0, bufferPosition);
+			await writer.WriteAsync(buffer, 0, bufferPosition).ConfigureAwait(false);
 			bufferPosition = 0;
 		}
 
@@ -740,14 +583,54 @@ namespace CsvHelper
 				return field;
 			}
 
+			int injectionCharIndex;
 			if (ArrayHelper.Contains(injectionCharacters, field[0]))
 			{
-				return injectionEscapeCharacter + field;
+				injectionCharIndex = 0;
+			}
+			else if (field[0] == quote && field[field.Length - 1] == quote && ArrayHelper.Contains(injectionCharacters, field[1]))
+			{
+				injectionCharIndex = 1;
+			}
+			else
+			{
+				return field;
 			}
 
-			if (field[0] == quote && ArrayHelper.Contains(injectionCharacters, field[1]))
+			if (injectionOptions == InjectionOptions.Exception)
 			{
-				return field[0].ToString() + injectionEscapeCharacter.ToString() + field.Substring(1);
+				throw new WriterException(context, $"Injection character '{field[injectionCharIndex]}' detected");
+			}
+
+			if (injectionOptions == InjectionOptions.Escape)
+			{
+				if (injectionCharIndex == 0)
+				{
+					// =1+"2 -> "'=1+""2"
+					field = quoteString + injectionEscapeCharacter + field.Replace(quoteString, escapeQuoteString) + quoteString;
+				}
+				else
+				{
+					// "=1+2" -> "'=1+2"
+					field = quoteString + injectionEscapeCharacter + field.Substring(injectionCharIndex);
+				}
+			}
+			else if (injectionOptions == InjectionOptions.Strip)
+			{
+				while (true)
+				{
+					field = field.Substring(1);
+
+					if (field.Length == 0 || !ArrayHelper.Contains(injectionCharacters, field[0]))
+					{
+						break;
+					}
+				}
+
+				if (injectionCharIndex == 1)
+				{
+					field = quoteString + field;
+				}
 			}
 
 			return field;
@@ -851,5 +734,81 @@ namespace CsvHelper
 			disposed = true;
 		}
 #endif
+
+#if !NET45
+		private async Task<bool> WriteHeaderAsync<T>(IAsyncEnumerable<T> records)
+		{
+			if (!hasHeaderRecord || hasHeaderBeenWritten)
+			{
+				return false;
+			}
+
+			var recordType = typeof(T);
+			var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
+			if (!isPrimitive && recordType != typeof(object))
+			{
+				WriteHeader(recordType);
+				return hasHeaderBeenWritten;
+			}
+
+			return WriteHeader(await records.FirstOrDefaultAsync());
+		}
+#endif
+
+		private bool WriteHeader<T>(IEnumerable<T> records)
+		{
+			if (!hasHeaderRecord || hasHeaderBeenWritten)
+			{
+				return false;
+			}
+
+			var recordType = typeof(T);
+			var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
+			if (!isPrimitive && recordType != typeof(object))
+			{
+				WriteHeader(recordType);
+				return hasHeaderBeenWritten;
+			}
+
+			return WriteHeader(records.FirstOrDefault());
+		}
+
+		private bool WriteHeader(IEnumerable records)
+		{
+			object? record = null;
+			foreach (var r in records)
+			{
+				if (r != null)
+				{
+					record = r;
+				}
+			}
+
+			return WriteHeader(record);
+		}
+
+		private bool WriteHeader(object? record)
+		{
+			if (record == null)
+			{
+				return false;
+			}
+
+			if (record is IDynamicMetaObjectProvider dynamicObject)
+			{
+				WriteDynamicHeader(dynamicObject);
+				return true;
+			}
+
+			var recordType = record.GetType();
+			var isPrimitive = recordType.GetTypeInfo().IsPrimitive;
+			if (!isPrimitive)
+			{
+				WriteHeader(recordType);
+				return true;
+			}
+
+			return false;
+		}
 	}
 }

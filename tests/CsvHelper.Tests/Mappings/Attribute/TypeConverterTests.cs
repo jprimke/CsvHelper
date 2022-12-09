@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -65,6 +65,14 @@ namespace CsvHelper.Tests.Mappings.Attribute
 			}
 		}
 
+		[Fact]
+		public void Constructor_TypeConverterWithConstructorArgs_Creates()
+		{
+			var attribute = new TypeConverterAttribute(typeof(TypeConverterWithConstructorArgs), 2);
+			Assert.IsType<TypeConverterWithConstructorArgs>(attribute.TypeConverter);
+			Assert.Equal(2, ((TypeConverterWithConstructorArgs)attribute.TypeConverter).Value);
+		}
+
 		private class TypeConverterClass
 		{
 			public int Id { get; set; }
@@ -86,22 +94,32 @@ namespace CsvHelper.Tests.Mappings.Attribute
 			}
 		}
 
-		public class AClass
+		private class AClass
 		{
 			public int Id { get; set; }
 			[TypeConverter(typeof(StringTypeConverter))]
 			public BClass Name { get; set; }
 		}
 
-		public class BClass { }
+		private class BClass { }
 
-		public class AStruct
+		private class AStruct
 		{
 			public int Id { get; set; }
 			[TypeConverter(typeof(StringTypeConverter))]
 			public BStruct Name { get; set; }
 		}
 
-		public class BStruct { }
+		private class BStruct { }
+
+		private class TypeConverterWithConstructorArgs : DefaultTypeConverter
+		{
+			public int Value { get; private set; }
+
+			public TypeConverterWithConstructorArgs(int value)
+			{
+				Value = value;
+			}
+		}
 	}
 }

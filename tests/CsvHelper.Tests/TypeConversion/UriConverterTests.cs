@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace CsvHelper.Tests.TypeConversion
 {
@@ -80,6 +81,26 @@ namespace CsvHelper.Tests.TypeConversion
 			var converter = cache.GetConverter<Uri>();
 
 			Assert.IsType<UriConverter>(converter);
+		}
+
+		[Fact]
+		public void AnonymousTypeTest()
+		{
+			var sw = new StringWriter();
+			var entries = new[]
+			{
+				new { Uri = new Uri("http://host/path") }
+			};
+			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+			{
+				Delimiter = ";",
+			};
+			using (var cw = new CsvWriter(sw, config))
+			{
+				cw.WriteRecords(entries);
+			}
+
+			Assert.Equal("Uri\r\nhttp://host/path\r\n", sw.ToString());
 		}
 	}
 }

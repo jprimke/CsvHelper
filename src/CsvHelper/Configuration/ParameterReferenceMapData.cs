@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -28,8 +28,22 @@ namespace CsvHelper.Configuration
 				{
 					memberMap.Data.Names.Prefix = value;
 				}
+
+				if (Inherit)
+				{
+					foreach (var memberRef in Mapping.ReferenceMaps)
+					{
+						memberRef.Data.Prefix = memberRef.Data.Prefix == null ? value : string.Concat(value, memberRef.Data.Prefix);
+					}
+				}
 			}
 		}
+
+		/// <summary>
+		/// Gets or sets a value indicating if a prefix should inherit its parent.
+		/// <c>true</c> to inherit, otherwise <c>false</c>.
+		/// </summary>
+		public virtual bool Inherit { get; set; }
 
 		/// <summary>
 		/// Gets the <see cref="ParameterInfo"/> that the data

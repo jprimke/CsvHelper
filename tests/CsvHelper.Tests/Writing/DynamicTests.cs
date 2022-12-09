@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -24,6 +24,7 @@ namespace CsvHelper.Tests.Writing
 			using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
 			{
 				var list = new List<dynamic>();
+
 				dynamic obj = new ExpandoObject();
 				obj.Id = 1;
 				obj.Name = "one";
@@ -58,6 +59,9 @@ namespace CsvHelper.Tests.Writing
 				obj.Id = 1;
 				obj.Name = "one";
 
+				csv.WriteDynamicHeader(obj);
+				csv.NextRecord();
+
 				csv.WriteRecord(obj);
 				csv.NextRecord();
 
@@ -89,6 +93,9 @@ namespace CsvHelper.Tests.Writing
 				obj.Name = "one";
 				obj.Id = 1;
 
+				csv.WriteDynamicHeader(obj);
+				csv.NextRecord();
+
 				csv.WriteRecord(obj);
 				csv.NextRecord();
 
@@ -116,6 +123,9 @@ namespace CsvHelper.Tests.Writing
 				dynamic obj = new DynamicObjectMock();
 				obj.Name = "one";
 				obj.Id = 1;
+
+				csv.WriteDynamicHeader(obj);
+				csv.NextRecord();
 
 				csv.WriteRecord(obj);
 				csv.NextRecord();
@@ -149,6 +159,9 @@ namespace CsvHelper.Tests.Writing
 				obj.Name = "one";
 				obj.Id = 1;
 
+				csv.WriteDynamicHeader(obj);
+				csv.NextRecord();
+
 				csv.WriteRecord(obj);
 				csv.NextRecord();
 
@@ -180,6 +193,9 @@ namespace CsvHelper.Tests.Writing
 				dynamic obj = new DynamicObjectMock();
 				obj.Name = "one";
 				obj.Id = 1;
+
+				csv.WriteDynamicHeader(obj);
+				csv.NextRecord();
 
 				csv.WriteRecord(obj);
 				csv.NextRecord();

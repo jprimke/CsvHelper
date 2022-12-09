@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -57,7 +57,7 @@ namespace CsvHelper.Tests
 			{
 				"1",
 				"blah",
-				DateTime.Now.ToString(),
+				DateTime.Now.ToString("O"),
 				"true",
 				"c",
 				"",
@@ -222,6 +222,10 @@ namespace CsvHelper.Tests
 				null,
 			};
 
+			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+			{
+				IgnoreBlankLines = false,
+			};
 			var reader = new CsvReader(parserMock);
 			reader.Read();
 
@@ -509,7 +513,7 @@ namespace CsvHelper.Tests
 				csvReader.Read();
 				csvReader.ReadHeader();
 				csvReader.Read();
-				throw new XunitException();
+				throw new XUnitException();
 			}
 			catch (ReaderException) { }
 		}
@@ -641,7 +645,7 @@ namespace CsvHelper.Tests
 			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
 			{
 				HasHeaderRecord = false,
-				ShouldSkipRecord = args => args.Record.All(string.IsNullOrWhiteSpace),
+				ShouldSkipRecord = args => args.Row.Parser.Record.All(string.IsNullOrWhiteSpace),
 			};
 
 			var parserMock = new ParserMock(config)
@@ -672,7 +676,7 @@ namespace CsvHelper.Tests
 			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
 			{
 				HasHeaderRecord = false,
-				ShouldSkipRecord = args => args.Record[1] == "2",
+				ShouldSkipRecord = args => args.Row[1] == "2",
 			};
 
 			var parserMock = new ParserMock(config)
@@ -881,7 +885,9 @@ namespace CsvHelper.Tests
 		{
 			var config = new CsvConfiguration(CultureInfo.InvariantCulture)
 			{
+				Delimiter = ",",
 				IgnoreBlankLines = false,
+				MissingFieldFound = null,
 			};
 			using (var stream = new MemoryStream())
 			using (var reader = new StreamReader(stream))
@@ -944,7 +950,7 @@ namespace CsvHelper.Tests
 				{ "Id", "Name" },
 				{ "1", "one" },
 				{ "2", "two" },
-				null,
+				null
 			};
 
 			var csv = new CsvReader(parserMock);
@@ -978,6 +984,28 @@ namespace CsvHelper.Tests
 			Assert.Equal("one", row.Field2);
 		}
 
+		[Fact]
+		public void TryGetFieldNotInHeaderTest() // https://github.com/JoshClose/CsvHelper/issues/1981
+		{
+			var parserMock = new ParserMock
+			{
+				{ "Id", "piz z/a"},
+				{ "1", "one" },
+				{ "Id" },
+				{ "2" }
+			};
+			var csv = new CsvReader(parserMock);
+			csv.Read();
+			csv.ReadHeader();
+			csv.Read();
+			csv.GetField<string>("piz z/a");
+
+			csv.Read();
+			csv.ReadHeader();
+			csv.Read();
+
+			Assert.False(csv.TryGetField<string>("piz z/a", out var tmp));
+		}
 		private class Nested
 		{
 			public Simple Simple1 { get; set; }

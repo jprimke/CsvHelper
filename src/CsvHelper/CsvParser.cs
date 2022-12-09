@@ -1,10 +1,10 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
 using CsvHelper.Configuration;
+using CsvHelper.Delegates;
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -22,7 +22,7 @@ namespace CsvHelper
 	/// </summary>
 	public class CsvParser : IParser, IDisposable
 	{
-		private readonly CsvConfiguration configuration;
+		private readonly IParserConfiguration configuration;
 		private readonly FieldCache fieldCache = new FieldCache();
 		private readonly TextReader reader;
 		private readonly char quote;
@@ -44,6 +44,7 @@ namespace CsvHelper
 		private readonly bool cacheFields;
 		private readonly string[] delimiterValues;
 		private readonly bool detectDelimiter;
+		private readonly double maxFieldSize;
 
 		private string delimiter;
 		private char delimiterFirstChar;
@@ -60,6 +61,7 @@ namespace CsvHelper
 		private bool inQuotes;
 		private bool inEscape;
 		private Field[] fields;
+		private string[] processedFields;
 		private int fieldsPosition;
 		private bool disposed;
 		private int quoteCount;
@@ -71,6 +73,8 @@ namespace CsvHelper
 		private bool fieldIsBadData;
 		private bool fieldIsQuoted;
 		private bool isProcessingField;
+		private bool isRecordProcessed;
+		private string[]? record;
 
 		/// <inheritdoc/>
 		public long CharCount => charCount;
@@ -82,10 +86,15 @@ namespace CsvHelper
 		public int Row => row;
 
 		/// <inheritdoc/>
-		public string[] Record
+		public string[]? Record
 		{
 			get
 			{
+				if (isRecordProcessed == true)
+				{
+					return this.record;
+				}
+
 				if (fieldsPosition == 0)
 				{
 					return null;
@@ -98,7 +107,10 @@ namespace CsvHelper
 					record[i] = this[i];
 				}
 
-				return record;
+				this.record = record;
+				isRecordProcessed = true;
+
+				return this.record;
 			}
 		}
 
@@ -151,19 +163,21 @@ namespace CsvHelper
 		/// <param name="reader">The reader.</param>
 		/// <param name="culture">The culture.</param>
 		/// <param name="leaveOpen">if set to <c>true</c> [leave open].</param>
-		public CsvParser(TextReader reader, CultureInfo culture, bool leaveOpen = false) : this(reader, new CsvConfiguration(culture) { LeaveOpen = leaveOpen }) { }
+		public CsvParser(TextReader reader, CultureInfo culture, bool leaveOpen = false) : this(reader, new CsvConfiguration(culture), leaveOpen) { }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CsvParser"/> class.
 		/// </summary>
 		/// <param name="reader">The reader.</param>
 		/// <param name="configuration">The configuration.</param>
-		public CsvParser(TextReader reader, CsvConfiguration configuration)
+		/// <param name="leaveOpen">if set to <c>true</c> [leave open].</param>
+		public CsvParser(TextReader reader, IParserConfiguration configuration, bool leaveOpen = false)
 		{
+			this.reader = reader ?? throw new ArgumentNullException(nameof(reader));
+			this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+
 			configuration.Validate();
 
-			this.reader = reader;
-			this.configuration = configuration;
 			Context = new CsvContext(this);
 
 			allowComments = configuration.AllowComments;
@@ -180,8 +194,9 @@ namespace CsvHelper
 			escape = configuration.Escape;
 			ignoreBlankLines = configuration.IgnoreBlankLines;
 			isNewLineSet = configuration.IsNewLineSet;
-			leaveOpen = configuration.LeaveOpen;
+			this.leaveOpen = leaveOpen;
 			lineBreakInQuotedFieldIsBadData = configuration.LineBreakInQuotedFieldIsBadData;
+			maxFieldSize = configuration.MaxFieldSize;
 			newLine = configuration.NewLine;
 			newLineFirstChar = configuration.NewLine[0];
 			mode = configuration.Mode;
@@ -193,11 +208,13 @@ namespace CsvHelper
 			buffer = new char[bufferSize];
 			processFieldBuffer = new char[processFieldBufferSize];
 			fields = new Field[128];
+			processedFields = new string[128];
 		}
 
 		/// <inheritdoc/>
 		public bool Read()
 		{
+			isRecordProcessed = false;
 			rowStartPosition = bufferPosition;
 			fieldStartPosition = rowStartPosition;
 			fieldsPosition = 0;
@@ -232,6 +249,7 @@ namespace CsvHelper
 		/// <inheritdoc/>
 		public async Task<bool> ReadAsync()
 		{
+			isRecordProcessed = false;
 			rowStartPosition = bufferPosition;
 			fieldStartPosition = rowStartPosition;
 			fieldsPosition = 0;
@@ -245,7 +263,7 @@ namespace CsvHelper
 			{
 				if (bufferPosition >= charsRead)
 				{
-					if (!await FillBufferAsync())
+					if (!await FillBufferAsync().ConfigureAwait(false))
 					{
 						return ReadEndOfFile();
 					}
@@ -264,38 +282,17 @@ namespace CsvHelper
 		}
 
 		private void DetectDelimiter()
-		{			
+		{
 			var text = new string(buffer, 0, charsRead);
-
-			while (text.Length > 0)
+			var newDelimiter = configuration.GetDelimiter(new GetDelimiterArgs(text, configuration));
+			if (newDelimiter != null)
 			{
-				var index = text.IndexOf(newLine);
-
-				var line = index > -1 ? text.Substring(0, index + newLine.Length) : text;
-
-				var delimiterCounts = new Dictionary<string, int>();
-				foreach (var delimiter in delimiterValues)
-				{
-					// Escape regex special chars to use as regex pattern.
-					var pattern = Regex.Replace(delimiter, @"([.$^{\[(|)*+?\\])", "\\$1");
-					delimiterCounts[delimiter] = Regex.Matches(line, pattern).Count;
-				}
-
-				var maxCount = delimiterCounts.OrderByDescending(c => c.Value).First();
-				if (maxCount.Value > 0)
-				{
-					delimiter = maxCount.Key;
-					delimiterFirstChar = delimiter[0];
-					configuration.Validate();
-
-					break;
-				}
-
-				text = index > -1 ? text.Substring(index + newLine.Length) : string.Empty;
+				delimiter = newDelimiter;
+				delimiterFirstChar = newDelimiter[0];
+				configuration.Validate();
 			}
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private ReadLineResult ReadLine(ref char c, ref char cPrev)
 		{
 			while (bufferPosition < charsRead)
@@ -347,9 +344,15 @@ namespace CsvHelper
 				c = buffer[bufferPosition];
 				bufferPosition++;
 				charCount++;
+
 				if (countBytes)
 				{
 					byteCount += encoding.GetByteCount(new char[] { c });
+				}
+
+				if (maxFieldSize > 0 && bufferPosition - fieldStartPosition - 1 > maxFieldSize)
+				{
+					throw new MaxFieldSizeException(Context);
 				}
 
 				var isFirstCharOfRow = rowStartPosition == bufferPosition - 1;
@@ -380,6 +383,7 @@ namespace CsvHelper
 							var result = ReadSpaces(ref c);
 							if (result == ReadLineResult.Incomplete)
 							{
+								fieldStartPosition = bufferPosition;
 								return result;
 							}
 						}
@@ -486,7 +490,6 @@ namespace CsvHelper
 			return ReadLineResult.Incomplete;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private ReadLineResult ReadSpaces(ref char c)
 		{
 			while (ArrayHelper.Contains(whiteSpaceChars, c))
@@ -508,7 +511,6 @@ namespace CsvHelper
 			return ReadLineResult.Complete;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private ReadLineResult ReadBlankLine(ref char c)
 		{
 			while (bufferPosition < charsRead)
@@ -539,7 +541,6 @@ namespace CsvHelper
 			return ReadLineResult.Incomplete;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private ReadLineResult ReadDelimiter(ref char c)
 		{
 			for (var i = delimiterPosition; i < delimiter.Length; i++)
@@ -582,7 +583,6 @@ namespace CsvHelper
 			return ReadLineResult.Complete;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private ReadLineResult ReadLineEnding(ref char c)
 		{
 			var lessChars = 1;
@@ -618,7 +618,6 @@ namespace CsvHelper
 			return ReadLineResult.Complete;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private ReadLineResult ReadNewLine(ref char c)
 		{
 			for (var i = newLinePosition; i < newLine.Length; i++)
@@ -661,7 +660,6 @@ namespace CsvHelper
 			return ReadLineResult.Complete;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool ReadEndOfFile()
 		{
 			var state = this.state;
@@ -705,12 +703,13 @@ namespace CsvHelper
 			return fieldsPosition > 0;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void AddField(in int start, in int length)
+		private void AddField(int start, int length)
 		{
 			if (fieldsPosition >= fields.Length)
 			{
-				Array.Resize(ref fields, fields.Length * 2);
+				var newSize = fields.Length * 2;
+				Array.Resize(ref fields, newSize);
+				Array.Resize(ref processedFields, newSize);
 			}
 
 			ref var field = ref fields[fieldsPosition];
@@ -718,12 +717,12 @@ namespace CsvHelper
 			field.Length = length;
 			field.QuoteCount = quoteCount;
 			field.IsBad = fieldIsBadData;
+			field.IsProcessed = false;
 
 			fieldsPosition++;
 			quoteCount = 0;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool FillBuffer()
 		{
 			// Don't forget the async method below.
@@ -756,7 +755,6 @@ namespace CsvHelper
 			return true;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private async Task<bool> FillBufferAsync()
 		{
 			if (rowStartPosition == 0 && charCount > 0 && charsRead == bufferSize)
@@ -776,7 +774,7 @@ namespace CsvHelper
 			rowStartPosition = 0;
 			bufferPosition = charsLeft;
 
-			charsRead = await reader.ReadAsync(buffer, charsLeft, buffer.Length - charsLeft);
+			charsRead = await reader.ReadAsync(buffer, charsLeft, buffer.Length - charsLeft).ConfigureAwait(false);
 			if (charsRead == 0)
 			{
 				return false;
@@ -787,8 +785,7 @@ namespace CsvHelper
 			return true;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private string GetField(in int index)
+		private string GetField(int index)
 		{
 			if (index > fieldsPosition)
 			{
@@ -800,6 +797,11 @@ namespace CsvHelper
 			if (field.Length == 0)
 			{
 				return string.Empty;
+			}
+
+			if (field.IsProcessed)
+			{
+				return processedFields[index];
 			}
 
 			var start = field.Start + rowStartPosition;
@@ -828,12 +830,14 @@ namespace CsvHelper
 				? fieldCache.GetField(processedField.Buffer, processedField.Start, processedField.Length)
 				: new string(processedField.Buffer, processedField.Start, processedField.Length);
 
+			processedFields[index] = value;
+			field.IsProcessed = true;
+
 			return value;
 		}
 
 		/// <inheritdoc/>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected ProcessedField ProcessRFC4180Field(in int start, in int length, in int quoteCount)
+		protected ProcessedField ProcessRFC4180Field(int start, int length, int quoteCount)
 		{
 			var newStart = start;
 			var newLength = length;
@@ -921,8 +925,7 @@ namespace CsvHelper
 		}
 
 		/// <inheritdoc/>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected ProcessedField ProcessRFC4180BadField(in int start, in int length)
+		protected ProcessedField ProcessRFC4180BadField(int start, int length)
 		{
 			// If field is already known to be bad, different rules can be applied.
 
@@ -1001,8 +1004,7 @@ namespace CsvHelper
 		}
 
 		/// <inheritdoc/>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected ProcessedField ProcessEscapeField(in int start, in int length)
+		protected ProcessedField ProcessEscapeField(int start, int length)
 		{
 			var newStart = start;
 			var newLength = length;
@@ -1048,8 +1050,7 @@ namespace CsvHelper
 		}
 
 		/// <inheritdoc/>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected ProcessedField ProcessNoEscapeField(in int start, in int length)
+		protected ProcessedField ProcessNoEscapeField(int start, int length)
 		{
 			var newStart = start;
 			var newLength = length;
@@ -1099,7 +1100,7 @@ namespace CsvHelper
 		/// This will remove quotes, remove escapes, and trim if configured to.
 		/// </summary>
 		[DebuggerDisplay("Start = {Start}, Length = {Length}, Buffer.Length = {Buffer.Length}")]
-		protected readonly ref struct ProcessedField
+		protected readonly struct ProcessedField
 		{
 			/// <summary>
 			/// The start of the field in the buffer.
@@ -1161,6 +1162,8 @@ namespace CsvHelper
 			public int QuoteCount;
 
 			public bool IsBad;
+
+			public bool IsProcessed;
 		}
 	}
 }

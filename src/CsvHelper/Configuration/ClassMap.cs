@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -511,8 +511,12 @@ namespace CsvHelper.Configuration
 
 					parameterMap.ReferenceMap = referenceMap;
 				}
-				else if (context.Configuration.ShouldUseConstructorParameters(new ShouldUseConstructorParametersArgs(parameter.ParameterType)))
+				else if (isDefaultConverter && context.Configuration.ShouldUseConstructorParameters(new ShouldUseConstructorParametersArgs(parameter.ParameterType)))
 				{
+					// If the type is not one covered by our type converters
+					// and it should use contructor parameters, create a
+					// constructor map for it.
+
 					mapParents.AddLast(type);
 					var constructorMapType = typeof(DefaultClassMap<>).MakeGenericType(parameter.ParameterType);
 					var constructorMap = (ClassMap)ObjectResolver.Current.Resolve(constructorMapType);
@@ -553,12 +557,12 @@ namespace CsvHelper.Configuration
 			var node = mapParents.Last;
 			while (true)
 			{
-				if (node.Value == type)
+				if (node?.Value == type)
 				{
 					return true;
 				}
 
-				node = node.Previous;
+				node = node?.Previous;
 				if (node == null)
 				{
 					break;
@@ -573,7 +577,7 @@ namespace CsvHelper.Configuration
 		/// </summary>
 		protected virtual Type GetGenericType()
 		{
-			return GetType().GetTypeInfo().BaseType.GetGenericArguments()[0];
+			return GetType().GetTypeInfo().BaseType?.GetGenericArguments()[0] ?? throw new ConfigurationException();
 		}
 
 		/// <summary>
@@ -612,6 +616,11 @@ namespace CsvHelper.Configuration
 		/// <param name="memberMap">The member map.</param>
 		protected virtual void ApplyAttributes(MemberMap memberMap)
 		{
+			if (memberMap.Data.Member == null)
+			{
+				return;
+			}
+
 			var member = memberMap.Data.Member;
 			var attributes = member.GetCustomAttributes().OfType<IMemberMapper>();
 

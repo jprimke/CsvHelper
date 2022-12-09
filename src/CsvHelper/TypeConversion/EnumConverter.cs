@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -44,9 +44,9 @@ namespace CsvHelper.TypeConversion
 
 			foreach (var value in Enum.GetValues(type))
 			{
-				var enumName = Enum.GetName(type, value);
+				var enumName = Enum.GetName(type, value) ?? string.Empty;
 
-				var nameAttribute = type.GetField(enumName).GetCustomAttribute<NameAttribute>();
+				var nameAttribute = type.GetField(enumName)?.GetCustomAttribute<NameAttribute>();
 				if (nameAttribute != null && nameAttribute.Names.Length > 0)
 				{
 					foreach (var attributeName in nameAttribute.Names)
@@ -71,7 +71,7 @@ namespace CsvHelper.TypeConversion
 		}
 
 		/// <inheritdoc/>
-		public override object ConvertFromString(string text, IReaderRow row, MemberMapData memberMapData)
+		public override object? ConvertFromString(string? text, IReaderRow row, MemberMapData memberMapData)
 		{
 			var ignoreCase = memberMapData.TypeConverterOptions.EnumIgnoreCase ?? false;
 
@@ -80,9 +80,9 @@ namespace CsvHelper.TypeConversion
 				var dict = ignoreCase
 					? enumNamesByAttributeNamesIgnoreCase
 					: enumNamesByAttributeNames;
-				if (dict.ContainsKey(text))
+				if (dict.TryGetValue(text, out var name))
 				{
-					return Enum.Parse(type, dict[text]);
+					return Enum.Parse(type, name);
 				}
 			}
 
@@ -108,11 +108,11 @@ namespace CsvHelper.TypeConversion
 		}
 
 		/// <inheritdoc/>
-		public override string ConvertToString(object value, IWriterRow row, MemberMapData memberMapData)
+		public override string? ConvertToString(object? value, IWriterRow row, MemberMapData memberMapData)
 		{
-			if (value != null && attributeNamesByEnumValues.ContainsKey(value))
+			if (value != null && attributeNamesByEnumValues.TryGetValue(value, out var name))
 			{
-				return attributeNamesByEnumValues[value];
+				return name;
 			}
 
 			return base.ConvertToString(value, row, memberMapData);

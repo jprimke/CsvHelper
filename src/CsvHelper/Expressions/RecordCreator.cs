@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -47,7 +47,14 @@ namespace CsvHelper.Expressions
 			}
 			catch (TargetInvocationException ex)
 			{
-				throw ex.InnerException;
+				if (ex.InnerException != null)
+				{
+					throw ex.InnerException;
+				}
+				else
+				{
+					throw;
+				}
 			}
 		}
 
@@ -55,7 +62,7 @@ namespace CsvHelper.Expressions
 		/// Create a record of the given type using the current row.
 		/// </summary>
 		/// <param name="recordType">The record type.</param>
-		public object Create(Type recordType)
+		public object? Create(Type recordType)
 		{
 			try
 			{
@@ -63,7 +70,14 @@ namespace CsvHelper.Expressions
 			}
 			catch (TargetInvocationException ex)
 			{
-				throw ex.InnerException;
+				if (ex.InnerException != null)
+				{
+					throw ex.InnerException;
+				}
+				else
+				{
+					throw;
+				}
 			}
 		}
 

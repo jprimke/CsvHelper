@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -254,9 +254,10 @@ namespace CsvHelper.Tests
 			stream.Position = 0;
 			var reader = new StreamReader(stream);
 			var csvFile = reader.ReadToEnd();
-			var expected = "first column,1,string column,test\r\n";
-			expected += ",,,\r\n";
-			expected += "first column,1,string column,test\r\n";
+			var expected = new TestStringBuilder(csv.Configuration.NewLine);
+			expected.AppendLine("first column,1,string column,test");
+			expected.AppendLine(",,,");
+			expected.AppendLine("first column,1,string column,test");
 
 			Assert.Equal(expected, csvFile);
 		}

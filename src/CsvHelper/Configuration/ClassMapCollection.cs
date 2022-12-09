@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -25,7 +25,7 @@ namespace CsvHelper.Configuration
 		/// </value>
 		/// <param name="type">The record type.</param>
 		/// <returns>The <see cref="ClassMap"/> for the specified record type.</returns>
-		public virtual ClassMap this[Type type]
+		public virtual ClassMap? this[Type type]
 		{
 			get
 			{
@@ -35,9 +35,9 @@ namespace CsvHelper.Configuration
 				var currentType = type;
 				while (true)
 				{
-					if (data.ContainsKey(currentType))
+					if (data.TryGetValue(currentType, out var map))
 					{
-						return data[currentType];
+						return map;
 					}
 
 					currentType = currentType.GetTypeInfo().BaseType;
@@ -63,9 +63,9 @@ namespace CsvHelper.Configuration
 		/// </summary>
 		/// <typeparam name="T">The record type.</typeparam>
 		/// <returns>The <see cref="ClassMap"/> for the specified record type.</returns>
-		public virtual ClassMap<T> Find<T>()
+		public virtual ClassMap<T>? Find<T>()
 		{
-			return (ClassMap<T>)this[typeof(T)];
+			return (ClassMap<T>?)this[typeof(T)];
 		}
 
 		/// <summary>
@@ -80,14 +80,7 @@ namespace CsvHelper.Configuration
 
 			var type = GetGenericCsvClassMapType(map.GetType()).GetGenericArguments().First();
 
-			if (data.ContainsKey(type))
-			{
-				data[type] = map;
-			}
-			else
-			{
-				data.Add(type, map);
-			}
+			data[type] = map;
 		}
 
 		/// <summary>
@@ -169,7 +162,7 @@ namespace CsvHelper.Configuration
 					continue;
 				}
 
-				if (memberMap.Data.TypeConverter == null)
+				if (memberMap.Data.TypeConverter == null && memberMap.Data.ReadingConvertExpression == null && memberMap.Data.WritingConvertExpression == null)
 				{
 					memberMap.Data.TypeConverter = context.TypeConverterCache.GetConverter(memberMap.Data.Member.MemberType());
 				}

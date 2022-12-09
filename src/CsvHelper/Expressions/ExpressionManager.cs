@@ -1,4 +1,4 @@
-﻿// Copyright 2009-2021 Josh Close
+﻿// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -101,10 +101,10 @@ namespace CsvHelper.Expressions
 					// Value type.
 
 					int index;
-					if (parameterMap.Data.IsNameSet || reader.Configuration.HasHeaderRecord && !parameterMap.Data.IsIndexSet)
+					if (reader.Configuration.HasHeaderRecord && (parameterMap.Data.IsNameSet || !parameterMap.Data.IsIndexSet))
 					{
 						// Use name.
-						index = reader.GetFieldIndex(parameterMap.Data.Names.ToArray(), parameterMap.Data.NameIndex, parameterMap.Data.IsOptional);
+						index = reader.GetFieldIndex(parameterMap.Data.Names, parameterMap.Data.NameIndex, parameterMap.Data.IsOptional);
 						if (index == -1)
 						{
 							if (parameterMap.Data.IsDefaultSet || parameterMap.Data.IsOptional)
@@ -199,7 +199,7 @@ namespace CsvHelper.Expressions
 		/// member and converting it to the member's type.
 		/// </summary>
 		/// <param name="memberMap">The mapping for the member.</param>
-		public virtual Expression CreateGetFieldExpression(MemberMap memberMap)
+		public virtual Expression? CreateGetFieldExpression(MemberMap memberMap)
 		{
 			if (memberMap.Data.ReadingConvertExpression != null)
 			{
@@ -225,10 +225,10 @@ namespace CsvHelper.Expressions
 			}
 
 			int index;
-			if (memberMap.Data.IsNameSet || reader.Configuration.HasHeaderRecord && !memberMap.Data.IsIndexSet)
+			if (reader.Configuration.HasHeaderRecord && (memberMap.Data.IsNameSet || !memberMap.Data.IsIndexSet))
 			{
 				// Use the name.
-				index = reader.GetFieldIndex(memberMap.Data.Names.ToArray(), memberMap.Data.NameIndex, memberMap.Data.IsOptional);
+				index = reader.GetFieldIndex(memberMap.Data.Names, memberMap.Data.NameIndex, memberMap.Data.IsOptional);
 				if (index == -1)
 				{
 					if (memberMap.Data.IsDefaultSet)
@@ -253,11 +253,12 @@ namespace CsvHelper.Expressions
 			// Validate the field.
 			if (memberMap.Data.ValidateExpression != null)
 			{
-				var constructor = typeof(ValidateArgs).GetConstructor(new Type[] { typeof(string) });
-				var args = Expression.New(constructor, fieldExpression);
+				var constructor = typeof(ValidateArgs).GetConstructor(new Type[] { typeof(string), typeof(IReaderRow) });
+				var args = Expression.New(constructor, fieldExpression, Expression.Constant(reader));
 				var validateExpression = Expression.IsFalse(Expression.Invoke(memberMap.Data.ValidateExpression, args));
-				var validationExceptionConstructor = typeof(FieldValidationException).GetConstructors().OrderBy(c => c.GetParameters().Length).First();
-				var newValidationExceptionExpression = Expression.New(validationExceptionConstructor, Expression.Constant(reader.Context), fieldExpression);
+				var validationExceptionConstructor = typeof(FieldValidationException).GetConstructor(new Type[] { typeof(CsvContext), typeof(string), typeof(string) });
+				var messageExpression = Expression.Invoke(memberMap.Data.ValidateMessageExpression, args);
+				var newValidationExceptionExpression = Expression.New(validationExceptionConstructor, Expression.Constant(reader.Context), fieldExpression, messageExpression);
 				var throwExpression = Expression.Throw(newValidationExceptionExpression);
 				fieldExpression = Expression.Block(
 					// If the validate method returns false, throw an exception.
@@ -285,7 +286,7 @@ namespace CsvHelper.Expressions
 		/// <param name="mapping">The mapping to look for the member to map on.</param>
 		/// <param name="memberMap">The member map to look for on the mapping.</param>
 		/// <returns>An Expression to access the given member.</returns>
-		public virtual Expression CreateGetMemberExpression(Expression recordExpression, ClassMap mapping, MemberMap memberMap)
+		public virtual Expression? CreateGetMemberExpression(Expression recordExpression, ClassMap mapping, MemberMap memberMap)
 		{
 			if (mapping.MemberMaps.Any(mm => mm == memberMap))
 			{

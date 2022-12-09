@@ -1,4 +1,4 @@
-// Copyright 2009-2021 Josh Close
+// Copyright 2009-2022 Josh Close
 // This file is a part of CsvHelper and is dual licensed under MS-PL and Apache 2.0.
 // See LICENSE.txt for details or visit http://www.opensource.org/licenses/ms-pl.html for MS-PL and http://opensource.org/licenses/Apache-2.0 for Apache 2.0.
 // https://github.com/JoshClose/CsvHelper
@@ -14,18 +14,17 @@ namespace CsvHelper.Configuration
 	public interface IWriterConfiguration
 	{
 		/// <summary>
+		/// Gets the size of the buffer
+		/// used for parsing and writing CSV files.
+		/// Default is 0x1000.
+		/// </summary>
+		int BufferSize { get; }
+
+		/// <summary>
 		/// The mode.
 		/// See <see cref="CsvMode"/> for more details.
 		/// </summary>
 		CsvMode Mode { get; }
-
-		/// <summary>
-		/// A value indicating whether to leave the <see cref="TextReader"/> or <see cref="TextWriter"/> open after this object is disposed.
-		/// </summary>
-		/// <value>
-		///   <c>true</c> to leave open, otherwise <c>false</c>.
-		/// </value>
-		bool LeaveOpen { get; }
 
 		/// <summary>
 		/// Gets the delimiter used to separate fields.
@@ -51,11 +50,9 @@ namespace CsvHelper.Configuration
 		TrimOptions TrimOptions { get; }
 
 		/// <summary>
-		/// Gets a value indicating if fields should be sanitized
-		/// to prevent malicious injection. This covers MS Excel, 
-		/// Google Sheets and Open Office Calc.
+		/// Gets the injection options.
 		/// </summary>
-		bool SanitizeForInjection { get; }
+		InjectionOptions InjectionOptions { get; }
 
 		/// <summary>
 		/// Gets the characters that are used for injection attacks.
@@ -162,5 +159,10 @@ namespace CsvHelper.Configuration
 		/// Default is <c>true</c>.
 		/// </summary>
 		bool ExceptionMessagesContainRawData { get; }
+
+		/// <summary>
+		/// Validates the configuration.
+		/// </summary>
+		void Validate();
 	}
 }
